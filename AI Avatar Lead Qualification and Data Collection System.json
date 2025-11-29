@@ -1,0 +1,695 @@
+{
+  "name": "AI Avatar Lead Qualification and Data Collection System",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "AI Avatar Configuration",
+        "formDescription": "Configure your AI avatar for lead qualification",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Avatar Image",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".jpg, .jpeg, .png",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Knowledge Base & Prompt",
+              "fieldType": "textarea",
+              "placeholder": "Enter the knowledge base and conversation prompt for your avatar",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Language",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "English"
+                  },
+                  {
+                    "option": "Spanish"
+                  },
+                  {
+                    "option": "French"
+                  },
+                  {
+                    "option": "German"
+                  },
+                  {
+                    "option": "Chinese"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false,
+          "buttonLabel": "Launch Avatar",
+          "path": "avatar-config",
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Thank you! Your AI Avatar session is being created. Please check your email or the execution logs for the session link."
+            }
+          }
+        }
+      },
+      "id": "c97d21cc-683b-4426-b04f-0f8d9ea2a335",
+      "name": "Avatar Configuration Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        512
+      ],
+      "webhookId": "dd7414fe-6aba-4847-9770-37514f9021c7"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "heygenApiKey",
+              "value": "sk_V2_hgu_kXIn06lGLeN_pW06Hxy4bRd38l2cCvkULfFpAEKL63bH",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "heygenApiUrl",
+              "value": "https://api.heygen.com/v1/streaming.new",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "heygenCloseUrl",
+              "value": "https://api.heygen.com/v1/streaming.stop",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "defaultAvatarId",
+              "value": "josh_lite3_20230714",
+              "type": "string"
+            },
+            {
+              "id": "id-6",
+              "name": "conversationDurationMinutes",
+              "value": 10,
+              "type": "number"
+            },
+            {
+              "id": "id-7",
+              "name": "costPerMinute",
+              "value": 0.15,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "94d09cdc-25cf-495d-81f6-e0f36d09b16d",
+      "name": "Workflow Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        672,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get form inputs from Avatar Configuration Form\nconst formData = $input.first().json;\n\n// Get workflow configuration\nconst config = $('Workflow Configuration').first().json;\n\n// Prepare HeyGen session request payload\nconst sessionRequest = {\n  quality: \"high\",\n  avatar_id: formData.avatar_id || config.avatar_id,\n  voice: {\n    voice_id: formData.voice_id || config.voice_id,\n    language: formData.language || config.language || \"en\"\n  },\n  knowledge_base: formData.knowledge_base || config.knowledge_base,\n  webhook_url: config.webhookCallbackUrl\n};\n\n// Return the prepared request\nreturn {\n  json: {\n    sessionRequest: sessionRequest,\n    formData: formData,\n    config: config\n  }\n};"
+      },
+      "id": "cdfb8666-6ed0-4a42-9199-12fd76fb0e4b",
+      "name": "Prepare HeyGen Session Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Workflow Configuration').item.json.heygenApiUrl }}",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "={{ $('Workflow Configuration').item.json.heygenApiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.sessionRequest }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "e36f05b8-f629-4f48-be77-3823ddbc20fa",
+      "name": "Create HeyGen Streaming Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1120,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate landing page URL with session parameters\nconst sessionData = $input.first().json;\n\n// Check if data exists before accessing properties\nif (!sessionData || !sessionData.data) {\n  console.error('HeyGen API Error:', JSON.stringify(sessionData, null, 2));\n  return [{ \n    json: { \n      error: true, \n      message: 'Failed to create HeyGen session', \n      details: sessionData \n    } \n  }];\n}\n\nconst sessionId = sessionData.data.session_id;\nconst accessToken = sessionData.data.access_token;\n\n// Create the landing page URL with session parameters\nconst baseUrl = 'https://anonsurf004.app.n8n.cloud';\nconst landingPageUrl = `${baseUrl}/avatar-session?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(accessToken)}`;\n\n// Return the URL as formSubmittedText for the Form Trigger to display\nreturn [{ \n  json: { \n    formSubmittedText: `Your AI Avatar session is ready! Click the link below to start:\\n\\n${landingPageUrl}\\n\\nThis link will open your personalized avatar conversation.`\n  } \n}];"
+      },
+      "id": "6a036f36-8a8d-4070-9567-53c2300a5e31",
+      "name": "Generate Landing Page HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "sessionId",
+              "value": "={{ $json.sessionId || 'test-session-' + $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "conversationDuration",
+              "value": "={{ $json.conversationDuration || 5 }}",
+              "type": "number"
+            },
+            {
+              "id": "id-4",
+              "name": "extractionStatus",
+              "value": "success",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "7ed5d239-f769-444c-9405-db8f710a8b8f",
+      "name": "Format Lead Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2016,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate usage report for the conversation\nconst items = $input.all();\n\n// Get conversation data from the current item\nconst conversationData = items[0].json;\n\n// Get workflow configuration (assuming it's available from a previous node)\nconst workflowConfig = $('Workflow Configuration').first().json;\n\n// Calculate conversation duration in minutes\n// Assuming conversation has start and end timestamps\nconst startTime = new Date(conversationData.startTime || conversationData.timestamp);\nconst endTime = new Date(conversationData.endTime || new Date());\nconst durationMs = endTime - startTime;\nconst durationMinutes = Math.round(durationMs / 60000 * 100) / 100; // Round to 2 decimal places\n\n// Get cost per minute from workflow configuration\nconst costPerMinute = workflowConfig.costPerMinute || 0.10; // Default to $0.10 per minute\n\n// Calculate total cost\nconst totalCost = Math.round(durationMinutes * costPerMinute * 100) / 100; // Round to 2 decimal places\n\n// Calculate credits used (assuming 1 credit = $0.01)\nconst creditsUsed = Math.round(totalCost * 100);\n\n// Create usage report\nconst usageReport = {\n  sessionId: conversationData.sessionId || conversationData.session_id,\n  conversationDurationMinutes: durationMinutes,\n  costPerMinute: costPerMinute,\n  totalCost: totalCost,\n  creditsUsed: creditsUsed,\n  timestamp: new Date().toISOString(),\n  startTime: startTime.toISOString(),\n  endTime: endTime.toISOString()\n};\n\nreturn [{ json: usageReport }];"
+      },
+      "id": "c19729ca-a0a4-412a-b2e9-c7b6191f43fb",
+      "name": "Calculate Usage Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.clientName }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "75a1c55f-dd09-4081-b195-8e67583f12f1",
+      "name": "Check Extraction Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "errorType",
+              "value": "extraction_failed",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "errorMessage",
+              "value": "Failed to extract required lead information from transcript",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "sessionId",
+              "value": "={{ $json.sessionId || 'unknown' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "da50db87-8b25-470f-b210-a2b07b8bcba8",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2016,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Workflow Configuration').item.json.heygenCloseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "={{ $('Workflow Configuration').item.json.heygenApiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"session_id\": \"{{ $('Create HeyGen Streaming Session').item.json.data.session_id }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c6b5487b-25b7-4945-86a2-6f214e293edf",
+      "name": "Close HeyGen Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3120,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract lead information from conversation transcript using regex patterns\nconst items = $input.all();\nconst inputData = items[0].json;\nconst transcript = inputData.transcript || inputData.body?.transcript || inputData.conversationTranscript || 'Sample transcript: My name is John Smith. My email is john@example.com. I work at Acme Corp. I need help with lead generation.';\nconsole.log('Processing transcript:', transcript);\n\n// Define regex patterns for extracting lead information\nconst patterns = {\n  // Name patterns - looking for \"my name is\", \"I'm\", \"this is\", etc.\n  name: /(?:my name is|i'm|i am|this is|call me)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)/i,\n  \n  // Email patterns - standard email format\n  email: /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9_-]+)/i,\n  \n  // Phone patterns - various formats\n  phone: /(?:phone|call|contact|number|reach me at)[:\\s]*([+]?[(]?[0-9]{1,4}[)]?[-\\s.]?[(]?[0-9]{1,4}[)]?[-\\s.]?[0-9]{1,4}[-\\s.]?[0-9]{1,9})/i,\n  \n  // Company patterns\n  company: /(?:work at|working for|company is|from|represent|with)\\s+([A-Z][a-zA-Z0-9\\s&.,'-]+(?:Inc|LLC|Ltd|Corporation|Corp)?)/i,\n  \n  // Needs/Requirements patterns\n  needs: /(?:need|looking for|interested in|want|require|help with)\\s+([a-zA-Z0-9\\s,.-]+?)(?:\\.|\\?|!|$)/i\n};\n\n// Extract information using regex patterns\nconst extractedData = {\n  clientName: '',\n  email: '',\n  phone: '',\n  company: '',\n  needs: '',\n  transcript: transcript,\n  extractionMethod: 'regex'\n};\n\n// Extract name\nconst nameMatch = transcript.match(patterns.name);\nif (nameMatch && nameMatch[1]) {\n  extractedData.clientName = nameMatch[1].trim();\n}\n\n// Extract email\nconst emailMatch = transcript.match(patterns.email);\nif (emailMatch && emailMatch[1]) {\n  extractedData.email = emailMatch[1].trim();\n}\n\n// Extract phone\nconst phoneMatch = transcript.match(patterns.phone);\nif (phoneMatch && phoneMatch[1]) {\n  extractedData.phone = phoneMatch[1].trim().replace(/[\\s.-]/g, '');\n}\n\n// Extract company\nconst companyMatch = transcript.match(patterns.company);\nif (companyMatch && companyMatch[1]) {\n  extractedData.company = companyMatch[1].trim();\n}\n\n// Extract needs\nconst needsMatch = transcript.match(patterns.needs);\nif (needsMatch && needsMatch[1]) {\n  extractedData.needs = needsMatch[1].trim();\n}\n\n// Return the extracted data\nreturn [{ json: extractedData }];"
+      },
+      "id": "ae659190-03e8-48bf-a7c4-f373a8eb8d46",
+      "name": "Extract Lead Info with Regex",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log lead data to console for testing\n// In production, this would write to a file or database\n\nconst items = $input.all();\n\n// Log each lead item\nitems.forEach((item, index) => {\n  console.log(`Lead ${index + 1}:`);\n  console.log(JSON.stringify(item.json, null, 2));\n  console.log('---');\n});\n\n// Return the items unchanged\nreturn items;"
+      },
+      "id": "e610c6ad-b246-4f80-8f4e-810dce207abf",
+      "name": "Save to JSON File (Leads)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log usage report to console for testing\n// In production, this would write to a file or database\n\nconst items = $input.all();\n\n// Get the usage report data\nconst usageReport = items[0].json;\n\n// Log the usage report with pretty formatting\nconsole.log('=== Usage Report ===');\nconsole.log(JSON.stringify(usageReport, null, 2));\n\n// Return the data unchanged for downstream nodes\nreturn items;"
+      },
+      "id": "d224251c-0517-4595-a874-b9ff9478f3ae",
+      "name": "Save to JSON File (Usage)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2896,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1EOv1UNMpaE1L3CTHf10hnhw4MIKglBSnl-ygXQdRIeo",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "clientName",
+              "displayName": "clientName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "needs",
+              "displayName": "needs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "transcript",
+              "displayName": "transcript",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "extractionMethod",
+              "displayName": "extractionMethod",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sessionId",
+              "displayName": "sessionId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversationDuration",
+              "displayName": "conversationDuration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "extractionStatus",
+              "displayName": "extractionStatus",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2448,
+        416
+      ],
+      "id": "e5a25c63-e14f-4994-8340-ea940a26da84",
+      "name": "Add Lead to Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HhwBor248ULFooKF",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Avatar Configuration Form": {
+      "main": [
+        [
+          {
+            "node": "Workflow Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow Configuration": {
+      "main": [
+        [
+          {
+            "node": "Prepare HeyGen Session Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare HeyGen Session Request": {
+      "main": [
+        [
+          {
+            "node": "Create HeyGen Streaming Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create HeyGen Streaming Session": {
+      "main": [
+        [
+          {
+            "node": "Generate Landing Page HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Extraction Success": {
+      "main": [
+        [
+          {
+            "node": "Format Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Save to JSON File (Leads)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Usage Report": {
+      "main": [
+        [
+          {
+            "node": "Save to JSON File (Usage)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Lead Info with Regex": {
+      "main": [
+        [
+          {
+            "node": "Check Extraction Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to JSON File (Leads)": {
+      "main": [
+        [
+          {
+            "node": "Add Lead to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to JSON File (Usage)": {
+      "main": [
+        [
+          {
+            "node": "Close HeyGen Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Landing Page HTML": {
+      "main": [
+        [
+          {
+            "node": "Extract Lead Info with Regex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Lead to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Calculate Usage Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c0871b45-554e-4a59-b4a1-85d352ea9af9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e66b503e2335a75f7e9ca93e3293a1f06ebdb8d990e8c818616a9e7330db8bd1"
+  },
+  "id": "k5q0PDTAu3Is6g3t",
+  "tags": []
+}
