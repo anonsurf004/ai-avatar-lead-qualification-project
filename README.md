@@ -184,6 +184,6 @@ This project is released under the MIT License.
 
 12. Author
 
-Asmit
+Asmit Dam
 AI / Automation Developer
 n8n | HeyGen | LLM Integrations
